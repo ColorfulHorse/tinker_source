@@ -119,12 +119,14 @@ public class TinkerPatchService extends IntentService {
         }
 
         Tinker tinker = Tinker.with(context);
+        // 回调事件
         tinker.getPatchReporter().onPatchServiceStart(intent);
 
         if (intent == null) {
             ShareTinkerLog.e(TAG, "TinkerPatchService received a null intent, ignoring.");
             return;
         }
+        // 补丁文件路径
         String path = getPatchPathExtra(intent);
         if (path == null) {
             ShareTinkerLog.e(TAG, "TinkerPatchService can't get the path extra, ignoring.");
@@ -142,6 +144,7 @@ public class TinkerPatchService extends IntentService {
             if (upgradePatchProcessor == null) {
                 throw new TinkerRuntimeException("upgradePatchProcessor is null.");
             }
+            // 调用UpgradePatch tryPatch合成补丁
             result = upgradePatchProcessor.tryPatch(context, path, patchResult);
         } catch (Throwable throwable) {
             e = throwable;

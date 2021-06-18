@@ -93,10 +93,11 @@ public class ResDiffPatchInternal extends BasePatchInternal {
             manager.getPatchReporter().onPatchPackageCheckFail(patchFile, BasePatchInternal.getMetaCorruptedCode(type));
             return false;
         }
+        // data/data/包名/tinker/patch-xxx/res
         File directory = new File(dir);
-
+        // data/data/包名/tinker/patch-xxx/res/res_temp
         File tempResFileDirectory = new File(directory, "res_temp");
-
+        // data/data/包名/tinker/patch-xxx/res/resources.apk
         File resOutput = new File(directory, ShareConstants.RES_NAME);
         //check result file whether already exist
         if (resOutput.exists()) {

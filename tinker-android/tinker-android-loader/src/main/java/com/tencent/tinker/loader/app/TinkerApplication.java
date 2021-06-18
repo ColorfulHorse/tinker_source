@@ -55,7 +55,7 @@ public abstract class TinkerApplication extends Application {
     private final String delegateClassName;
     // TinkerLoader类包名
     private final String loaderClassName;
-
+    //
     private final boolean useDelegateLastClassLoader;
 
     /**

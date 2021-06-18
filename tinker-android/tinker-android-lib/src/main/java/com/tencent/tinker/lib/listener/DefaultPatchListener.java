@@ -69,7 +69,7 @@ public class DefaultPatchListener implements PatchListener {
         if (returnCode == ShareConstants.ERROR_PATCH_OK) {
             // 绑定TinkerPatchForeService，它运行在:patch进程
             runForgService();
-            // 启动TinkerPatchService合成
+            // 启动TinkerPatchService合成补丁
             TinkerPatchService.runPatchService(context, path);
         } else {
             Tinker.with(context).getLoadReporter().onLoadPatchListenerReceiveFail(new File(path), returnCode);

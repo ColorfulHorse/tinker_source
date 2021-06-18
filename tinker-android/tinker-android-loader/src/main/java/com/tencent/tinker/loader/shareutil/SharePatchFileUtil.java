@@ -474,18 +474,18 @@ public class SharePatchFileUtil {
 
             String currentInstructionSet;
             try {
+                // 获取指令集
                 currentInstructionSet = ShareTinkerInternals.getCurrentInstructionSet();
             } catch (Exception e) {
                 throw new TinkerRuntimeException("getCurrentInstructionSet fail:", e);
             }
-
             File parentFile = path.getParentFile();
             String fileName = path.getName();
             int index = fileName.lastIndexOf('.');
             if (index > 0) {
                 fileName = fileName.substring(0, index);
             }
-
+            // data/data/包名/tinker/patch-xxx/oat/<isa>/xxx.odex
             String result = parentFile.getAbsolutePath() + "/oat/"
                 + currentInstructionSet + "/" + fileName + ShareConstants.ODEX_SUFFIX;
             return result;
@@ -503,8 +503,8 @@ public class SharePatchFileUtil {
                 fileName = sb.toString();
             }
         }
-
         File result = new File(optimizedDirectory, fileName);
+        // data/data/包名/tinker/patch-xxx/odex/xxx.dex
         return result.getPath();
     }
 

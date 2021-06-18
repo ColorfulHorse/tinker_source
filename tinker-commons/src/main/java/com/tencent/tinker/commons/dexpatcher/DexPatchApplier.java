@@ -107,8 +107,7 @@ public class DexPatchApplier {
     }
 
     public void executeAndSaveTo(OutputStream out) throws IOException {
-        // Before executing, we should check if this patch can be applied to
-        // old dex we passed in.
+        // old dex SHA-1摘要
         byte[] oldDexSign = this.oldDex.computeSignature(false);
         if (oldDexSign == null) {
             throw new IOException("failed to compute old dex's signature.");
@@ -116,6 +115,7 @@ public class DexPatchApplier {
         if (this.patchFile == null) {
             throw new IllegalArgumentException("patch file is null.");
         }
+        // patch dex中记录的old dex SHA-1摘要
         byte[] oldDexSignInPatchFile = this.patchFile.getOldDexSignature();
         if (CompareUtils.uArrCompare(oldDexSign, oldDexSignInPatchFile) != 0) {
             throw new IOException(

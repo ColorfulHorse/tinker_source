@@ -46,9 +46,7 @@ public class TinkerInstaller {
     }
 
     /**
-     * install tinker with custom config, you must install tinker before you use their api
-     * or you can just use {@link TinkerApplicationHelper}'s api
-     *
+     * 需要调用tinker.install后才能使用tinker api，否则只能使用TinkerApplicationHelper中的api
      * @param applicationLike  application代理
      * @param loadReporter  加载补丁的回调类，默认DefaultLoadReporter
      * @param patchReporter 合成补丁的回调类，默认DefaultPatchReporter
@@ -69,6 +67,7 @@ public class TinkerInstaller {
             .tinkerLoadVerifyFlag(applicationLike.getTinkerLoadVerifyFlag()).build();
 
         Tinker.create(tinker);
+        // getTinkerResultIntent得到的是此次启动加载补丁的结果信息
         tinker.install(applicationLike.getTinkerResultIntent(), resultServiceClass, upgradePatchProcessor);
         return tinker;
     }

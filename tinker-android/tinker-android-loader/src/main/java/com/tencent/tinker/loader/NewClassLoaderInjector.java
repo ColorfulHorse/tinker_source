@@ -54,6 +54,7 @@ final class NewClassLoaderInjector {
                                                     File dexOptDir,
                                                     boolean useDLC,
                                                     String... patchDexPaths) throws Throwable {
+        // 反射获取BaseDexClassLoader的DexPathList，dex路径列表
         final Field pathListField = findField(
                 Class.forName("dalvik.system.BaseDexClassLoader", false, oldClassLoader),
                 "pathList");
@@ -69,10 +70,10 @@ final class NewClassLoaderInjector {
                 dexPathBuilder.append(patchDexPaths[i]);
             }
         }
-
+        // 拼接成dex路径
         final String combinedDexPath = dexPathBuilder.toString();
 
-
+        // DexPathList中nativeLibraryDirectories字段，so库路径
         final Field nativeLibraryDirectoriesField = findField(oldPathList.getClass(), "nativeLibraryDirectories");
         List<File> oldNativeLibraryDirectories = null;
         if (nativeLibraryDirectoriesField.getType().isArray()) {
@@ -93,16 +94,25 @@ final class NewClassLoaderInjector {
             }
             libraryPathBuilder.append(libDir.getAbsolutePath());
         }
-
+        // 拼接so库路径
         final String combinedLibraryPath = libraryPathBuilder.toString();
 
         ClassLoader result = null;
         if (useDLC && Build.VERSION.SDK_INT >= 27) {
+            // https://developer.android.google.cn/reference/dalvik/system/DelegateLastClassLoader
+            // https://www.androidos.net.cn/android/10.0.0_r6/xref/libcore/dalvik/src/main/java/dalvik/system/DelegateLastClassLoader.java
+            // DelegateLastClassLoader是android8.1后新增的，继承于PathClassLoader，实行最后查找策略
+            // 从boot classpath中查找类
+            // 从该classLoader的dexPath中查找类
+            // 最后从该classLoader的双亲中查找类
+            // 最后查找策略没有遵守双亲委托，最后才从parent classloader中查找类
             result = new DelegateLastClassLoader(combinedDexPath, combinedLibraryPath, ClassLoader.getSystemClassLoader());
+            // 将之前的PathClassLoader设为创建的DelegateLastClassLoader的双亲
             final Field parentField = ClassLoader.class.getDeclaredField("parent");
             parentField.setAccessible(true);
             parentField.set(result, oldClassLoader);
         } else {
+            // 做的事情和DelegateLastClassLoader差不多
             result = new TinkerClassLoader(combinedDexPath, dexOptDir, combinedLibraryPath, oldClassLoader);
         }
 

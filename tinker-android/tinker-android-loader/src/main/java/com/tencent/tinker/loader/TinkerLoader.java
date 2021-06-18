@@ -177,7 +177,8 @@ public class TinkerLoader extends AbstractTinkerLoader {
         boolean versionChanged = !(oldVersion.equals(newVersion));
         // 编译模式是否改变了 解释模式/aot模式
         boolean oatModeChanged = oatDex.equals(ShareConstants.CHANING_DEX_OPTIMIZE_PATH);
-        // 编译模式 odex/interpet，解释模式在系统OTA后在子进程进行
+        // 判断编译模式 odex/interpet
+        // 如果编译模式被标记为changing，当前在主进程时
         oatDex = ShareTinkerInternals.getCurrentOatMode(app, oatDex);
         resultIntent.putExtra(ShareIntentUtil.INTENT_PATCH_OAT_DIR, oatDex);
 

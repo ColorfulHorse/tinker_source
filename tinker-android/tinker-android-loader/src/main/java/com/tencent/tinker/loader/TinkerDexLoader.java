@@ -241,10 +241,10 @@ public class TinkerDexLoader {
                 // test.dex
                 testInfo = info;
             } else if (isVmArt && ShareConstants.CLASS_N_PATTERN.matcher(info.realName).matches()) {
-                // classesN.dex，art下主dex之外的dex
+                // art下所有classesN.dex
                 classNDexInfo.add(info);
             } else {
-                // 需要加载的dex
+                // dalvik主dex
                 dexes.put(info.realName, getInfoMd5(info));
                 LOAD_DEX_LIST.add(info);
             }
@@ -321,7 +321,7 @@ public class TinkerDexLoader {
         }
 
         String destMd5InDvm = dexDiffPatchInfo.destMd5InDvm;
-
+        // dalvik下非主dex该字段值为"0"
         if (destMd5InDvm.equals("0")) {
             return true;
         }

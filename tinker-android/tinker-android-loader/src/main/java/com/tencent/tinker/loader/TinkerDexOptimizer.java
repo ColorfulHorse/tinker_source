@@ -144,18 +144,27 @@ public final class TinkerDexOptimizer {
                 if (callback != null) {
                     callback.onStart(dexFile, optimizedDir);
                 }
+                // android8.0后是data/data/包名/tinker/patch-xxx/oat/<isa>/xxx.odex
+                // 8.0前是data/data/包名/tinker/patch-xxx/odex/xxx.dex
                 String optimizedPath = SharePatchFileUtil.optimizedPathFor(this.dexFile, this.optimizedDir);
                 if (!ShareTinkerInternals.isArkHotRuning()) {
                     if (useInterpretMode) {
+                        // 以解释模式编译
                         interpretDex2Oat(dexFile.getAbsolutePath(), optimizedPath);
                     } else if (Build.VERSION.SDK_INT >= 26
                             || (Build.VERSION.SDK_INT >= 25 && Build.VERSION.PREVIEW_SDK_INT != 0)) {
+                        // 通过PathClassLoader/加载dex触发dex2oat
                         NewClassLoaderInjector.triggerDex2Oat(context, optimizedDir,
                                                               useDLC, dexFile.getAbsolutePath());
                         // Android Q is significantly slowed down by Fallback Dex Loading procedure, so we
                         // trigger background dexopt to generate executable odex here.
+                        // https://developer.android.google.cn/about/versions/10/behavior-changes-10?hl=zh-cn#system-only-oat
+                        // android10以后不再从应用进程调用dex2oat，仅接受系统生成的OAT文件
+                        // oat_file_manager.cc  OatFileManager::OpenDexFilesFromOat不再调用oat_file_assistant.MakeUpToDate
+                        // 这里通过pms触发后台dex2oat
                         triggerPMDexOptOnDemand(context, dexFile.getAbsolutePath(), optimizedPath);
                     } else {
+                        // 直接使用DexFile触发dex2oat
                         DexFile.loadDex(dexFile.getAbsolutePath(), optimizedPath, 0);
                     }
                 }
@@ -189,6 +198,7 @@ public final class TinkerDexOptimizer {
                 }
                 boolean performDexOptSecondarySuccess = true;
                 try {
+                    // 调用PMS.performDexOptSecondary触发dex2oat
                     performDexOptSecondary(context, oatPath);
                 } catch (Throwable thr) {
                     ShareTinkerLog.printErrStackTrace(TAG, thr, "[-] Fail to call performDexOptSecondary.");
@@ -215,6 +225,7 @@ public final class TinkerDexOptimizer {
             try {
                 ShareTinkerLog.i(TAG, "[+] Start trigger secondary dexopt.");
                 final File oatFile = new File(oatPath);
+                // 反射获取pms代理用于ipc标记pms.performDexOptSecondary方法的transactionCode
                 final int transactionCode = queryPerformDexOptSecondaryTransactionCode();
                 final String packageName = context.getPackageName();
                 final String targetCompilerFilter = "quicken";
@@ -222,6 +233,7 @@ public final class TinkerDexOptimizer {
 
                 final Class<?> serviceManagerClazz = Class.forName("android.os.ServiceManager");
                 final Method getServiceMethod = ShareReflectUtil.findMethod(serviceManagerClazz, "getService", String.class);
+                // 拿到PMS远程代理
                 final IBinder pmBinder = (IBinder) getServiceMethod.invoke(null, "package");
                 if (pmBinder == null) {
                     throw new IllegalStateException("Fail to get pm binder.");
@@ -230,6 +242,7 @@ public final class TinkerDexOptimizer {
                 for (int i = 0; i < maxRetries; ++i) {
                     Throwable pendingThr = null;
                     try {
+                        // 直接通过binder调用pms performDexOptSecondary
                         performDexOptSecondaryImpl(pmBinder, transactionCode, packageName, targetCompilerFilter, force);
                     } catch (Throwable thr) {
                         pendingThr = thr;
@@ -257,6 +270,7 @@ public final class TinkerDexOptimizer {
 
         private static int queryPerformDexOptSecondaryTransactionCode() throws UnsupportedOperationException {
             try {
+                // getDeclaredField method
                 final Method getDeclaredFieldMethod = ShareReflectUtil.findMethod(Class.class, "getDeclaredField", String.class);
                 getDeclaredFieldMethod.setAccessible(true);
                 final Field cstField = (Field) getDeclaredFieldMethod.invoke(Class.forName("android.content.pm.IPackageManager$Stub"),
