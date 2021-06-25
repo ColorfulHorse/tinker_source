@@ -59,7 +59,7 @@ public class TinkerPatchService extends IntentService {
         Intent intent = new Intent(context, TinkerPatchService.class);
         // 补丁路径
         intent.putExtra(PATCH_PATH_EXTRA, path);
-        // 合成结果回调类名
+        // 合成结果回调类名，默认DefaultTinkerResultService
         intent.putExtra(RESULT_CLASS_EXTRA, resultServiceClass.getName());
         try {
             context.startService(intent);
@@ -160,7 +160,7 @@ public class TinkerPatchService extends IntentService {
         patchResult.rawPatchFilePath = path;
         patchResult.costTime = cost;
         patchResult.e = e;
-
+        // 回调合成结果到DefaultTinkerResultService
         AbstractResultService.runResultService(context, patchResult, getPatchResultExtra(intent));
 
         sIsPatchApplying.set(false);

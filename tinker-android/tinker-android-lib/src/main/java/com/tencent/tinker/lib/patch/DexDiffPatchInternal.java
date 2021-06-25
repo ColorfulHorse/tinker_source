@@ -170,7 +170,7 @@ public class DexDiffPatchInternal extends BasePatchInternal {
     private static boolean patchDexExtractViaDexDiff(Context context, String patchVersionDirectory, String meta, final File patchFile, PatchResult patchResult) {
         // data/data/包名/tinker/patch-xxx/dex
         String dir = patchVersionDirectory + "/" + DEX_PATH + "/";
-
+        // 合成dex
         if (!extractDexDiffInternals(context, dir, meta, patchFile, TYPE_DEX)) {
             ShareTinkerLog.w(TAG, "patch recover, extractDiffInternals fail");
             return false;
@@ -195,11 +195,10 @@ public class DexDiffPatchInternal extends BasePatchInternal {
         }
 
         ShareTinkerLog.i(TAG, "legal files to do dexopt: " + legalFiles);
-        // data/data/包名/tinker/patch-xxx/odex
+        // 存放dexopt产物，data/data/包名/tinker/patch-xxx/odex
         final String optimizeDexDirectory = patchVersionDirectory + "/" + DEX_OPTIMIZE_PATH + "/";
-        // 手动执行dexopt
+        // 触发执行dexopt
         return dexOptimizeDexFiles(context, legalFiles, optimizeDexDirectory, patchFile, patchResult);
-
     }
 
     private static boolean checkClassNDexFiles(final String dexFilePath) {
@@ -244,7 +243,7 @@ public class DexDiffPatchInternal extends BasePatchInternal {
         } else {
             result = false;
         }
-        // 如果tinker_classN.apk已经存在并校验通过，则不需要将classesN.dex合成为tinker_classN.apk，将所有dex删除即可
+        // 如果tinker_classN.apk已经存在并校验通过，则不需要将补丁包中classesN.dex合成为tinker_classN.apk，将所有dex删除即可
         if (result) {
             // delete classN dex if exist
             for (File dexFile : classNDexInfo.values()) {
@@ -355,13 +354,10 @@ public class DexDiffPatchInternal extends BasePatchInternal {
 
     private static boolean dexOptimizeDexFiles(Context context, List<File> dexFiles, String optimizeDexDirectory, final File patchFile, final PatchResult patchResult) {
         final Tinker manager = Tinker.with(context);
-
         optFiles.clear();
-
         if (dexFiles != null) {
             // data/data/包名/tinker/patch-xxx/odex
             File optimizeDexDirectoryFile = new File(optimizeDexDirectory);
-
             if (!optimizeDexDirectoryFile.exists() && !optimizeDexDirectoryFile.mkdirs()) {
                 ShareTinkerLog.w(TAG, "patch recover, make optimizeDexDirectoryFile fail");
                 return false;
@@ -375,16 +371,13 @@ public class DexDiffPatchInternal extends BasePatchInternal {
                 optFiles.add(new File(outputPathName));
             }
 
-            ShareTinkerLog.i(TAG, "patch recover, try to optimize dex file count:%d, optimizeDexDirectory:%s", dexFiles.size(), optimizeDexDirectory);
-            // only use parallel dex optimizer for art
-            // for Android O version, it is very strange. If we use parallel dex optimizer, it won't work
             final List<File> failOptDexFile = new Vector<>();
             final Throwable[] throwable = new Throwable[1];
 
             if (patchResult != null) {
                 patchResult.dexoptTriggerTime = System.currentTimeMillis();
             }
-
+            // 是否使用DelegateLastClassLoader类
             final boolean useDLC = TinkerApplication.getInstance().isUseDelegateLastClassLoader();
             final boolean[] anyOatNotGenerated = {false};
 
@@ -507,7 +500,7 @@ public class DexDiffPatchInternal extends BasePatchInternal {
 
                 String dexDiffMd5 = info.dexDiffMd5;
                 String oldDexCrc = info.oldDexCrC;
-
+                // 非主dex，且该dex没有改变的话destMd5InDvm字段值为"0"，此dex在art下无需合成
                 if (!isVmArt && info.destMd5InDvm.equals("0")) {
                     ShareTinkerLog.w(TAG, "patch dex %s is only for art, just continue", patchRealPath);
                     continue;
@@ -522,7 +515,7 @@ public class DexDiffPatchInternal extends BasePatchInternal {
                 // data/data/包名/tinker/patch-xxx/dex/dex名称，用于存放合成后的dex
                 File extractedFile = new File(dir + info.realName);
 
-                // 检查合成后的dex是否已经存在
+                // 检查合成后的dex（此时还未合成，如果存在说明之前已经合成过该dex）是否已经存在，存在说明已经合成过该dex
                 // 已经存在则要验证是否和补丁包中记录的预合成的dex的md5一致性，不一致需要删除已存在的dex
                 if (extractedFile.exists()) {
                     if (SharePatchFileUtil.verifyDexFileMd5(extractedFile, extractedFileMd5)) {
@@ -555,8 +548,8 @@ public class DexDiffPatchInternal extends BasePatchInternal {
                         return false;
                     }
                 } else if (dexDiffMd5.equals("0")) {
-                    // dexDiffMd5为"0"代表dex没有改变
-                    // skip process old dex for real dalvik vm
+                    // oldDexCrc不为"0"，dexDiffMd5为"0"代表该dex没有改变
+                    // 此情况art下需要将old dex拷贝到补丁dex目录，dalvik下忽略
                     if (!isVmArt) {
                         continue;
                     }
@@ -611,7 +604,7 @@ public class DexDiffPatchInternal extends BasePatchInternal {
                         manager.getPatchReporter().onPatchTypeExtractFail(patchFile, extractedFile, info.rawName, type);
                         return false;
                     }
-                    // 合成补丁，合成完后写入合成结果dex到extractedFile(data/data/包名/tinker/patch-xxx/dex/)
+                    // 合成补丁，合成完后写入合成结果dex到extractedFile(data/data/包名/tinker/patch-xxx/dex)
                     // 内部通过DexPatchApplier类合成补丁，算法实现相关代码不具体分析
                     patchDexFile(apk, patch, rawApkFileEntry, patchFileEntry, info, extractedFile);
                     // 校验本次合成成功后dex的md5，是否和打补丁包时预合成的md5一致
@@ -626,7 +619,7 @@ public class DexDiffPatchInternal extends BasePatchInternal {
                         extractedFile.getPath(), extractedFile.length(), (System.currentTimeMillis() - start));
                 }
             }
-            // 将所有classesN.dex合成为tinker_classN.apk
+            // art将所有合成完毕的dex打包为tinker_classN.apk
             if (!mergeClassNDexFiles(context, patchFile, dir)) {
                 return false;
             }

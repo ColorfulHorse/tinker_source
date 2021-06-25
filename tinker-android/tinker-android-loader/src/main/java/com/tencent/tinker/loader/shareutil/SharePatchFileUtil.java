@@ -485,7 +485,7 @@ public class SharePatchFileUtil {
             if (index > 0) {
                 fileName = fileName.substring(0, index);
             }
-            // data/data/包名/tinker/patch-xxx/oat/<isa>/xxx.odex
+            // data/data/包名/tinker/patch-xxx/dex/oat/<isa>/xxx.odex
             String result = parentFile.getAbsolutePath() + "/oat/"
                 + currentInstructionSet + "/" + fileName + ShareConstants.ODEX_SUFFIX;
             return result;

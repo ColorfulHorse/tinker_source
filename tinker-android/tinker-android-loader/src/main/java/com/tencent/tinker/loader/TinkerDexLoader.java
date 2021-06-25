@@ -148,7 +148,7 @@ public class TinkerDexLoader {
             deleteOutOfDateOATFile(directory);
 
             ShareTinkerLog.w(TAG, "systemOTA, try parallel oat dexes, targetISA:" + targetISA);
-            // change dir
+            // data/data/包名/tinker/patch-xxx/interpret
             optimizeDir = new File(directory + "/" + INTERPRET_DEX_OPTIMIZE_PATH);
 
             TinkerDexOptimizer.optimizeAll(

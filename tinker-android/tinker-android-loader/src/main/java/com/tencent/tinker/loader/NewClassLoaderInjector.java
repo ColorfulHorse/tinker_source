@@ -54,7 +54,8 @@ final class NewClassLoaderInjector {
                                                     File dexOptDir,
                                                     boolean useDLC,
                                                     String... patchDexPaths) throws Throwable {
-        // 反射获取BaseDexClassLoader的DexPathList，dex路径列表
+        // 反射获取BaseDexClassLoader的DexPathList字段
+        // old oldClassLoader是当前app的PathClassLoader
         final Field pathListField = findField(
                 Class.forName("dalvik.system.BaseDexClassLoader", false, oldClassLoader),
                 "pathList");
@@ -70,10 +71,10 @@ final class NewClassLoaderInjector {
                 dexPathBuilder.append(patchDexPaths[i]);
             }
         }
-        // 拼接成dex路径
+        // 拼接需要dex2oat的dex文件路径
         final String combinedDexPath = dexPathBuilder.toString();
 
-        // DexPathList中nativeLibraryDirectories字段，so库路径
+        // 反射DexPathList中nativeLibraryDirectories字段，so库路径
         final Field nativeLibraryDirectoriesField = findField(oldPathList.getClass(), "nativeLibraryDirectories");
         List<File> oldNativeLibraryDirectories = null;
         if (nativeLibraryDirectoriesField.getType().isArray()) {
@@ -115,38 +116,38 @@ final class NewClassLoaderInjector {
             // 做的事情和DelegateLastClassLoader差不多
             result = new TinkerClassLoader(combinedDexPath, dexOptDir, combinedLibraryPath, oldClassLoader);
         }
-
-        // 'EnsureSameClassLoader' mechanism which is first introduced in Android O
-        // may cause exception if we replace definingContext of old classloader.
+        // Android8.0之前版本替换原本的PathClassLoader中PathList中的classLoader为新创建的
+        // Android 8.0之后不支持多个类加载器同时使用同一个DexFile对象来定义类，所以不能替换
         if (Build.VERSION.SDK_INT < 26) {
             findField(oldPathList.getClass(), "definingContext").set(oldPathList, result);
         }
-
         return result;
     }
 
     private static void doInject(Application app, ClassLoader classLoader) throws Throwable {
         Thread.currentThread().setContextClassLoader(classLoader);
-
+        // ContextWrapper.mBase是该app的ContextImpl实例，LoadedApk.makeApplication中创建
         final Context baseContext = (Context) findField(app.getClass(), "mBase").get(app);
         try {
+            // 替换ContextImpl中mClassLoader
             findField(baseContext.getClass(), "mClassLoader").set(baseContext, classLoader);
         } catch (Throwable ignored) {
-            // There's no mClassLoader field in ContextImpl before Android O.
-            // However we should try our best to replace this field in case some
-            // customized system has one.
+            // 8.0前ContextImpl中没有mClassLoader
         }
-
+        // app的ContextImpl中mPackageInfo是一个LoadedApk实例
         final Object basePackageInfo = findField(baseContext.getClass(), "mPackageInfo").get(baseContext);
+        // 替换LoadedApk的ClassLoader
         findField(basePackageInfo.getClass(), "mClassLoader").set(basePackageInfo, classLoader);
 
         if (Build.VERSION.SDK_INT < 27) {
             final Resources res = app.getResources();
             try {
+                // 替换Resources中ClassLoader
                 findField(res.getClass(), "mClassLoader").set(res, classLoader);
 
                 final Object drawableInflater = findField(res.getClass(), "mDrawableInflater").get(res);
                 if (drawableInflater != null) {
+                    // 替换DrawableInflater中ClassLoader
                     findField(drawableInflater.getClass(), "mClassLoader").set(drawableInflater, classLoader);
                 }
             } catch (Throwable ignored) {

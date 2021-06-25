@@ -44,34 +44,28 @@ public class UpgradePatch extends AbstractPatch {
     @Override
     public boolean tryPatch(Context context, String tempPatchPath, PatchResult patchResult) {
         Tinker manager = Tinker.with(context);
-
         final File patchFile = new File(tempPatchPath);
-
         if (!manager.isTinkerEnabled() || !ShareTinkerInternals.isTinkerEnableWithSharedPreferences(context)) {
-            ShareTinkerLog.e(TAG, "UpgradePatch tryPatch:patch is disabled, just return");
             return false;
         }
 
         if (!SharePatchFileUtil.isLegalFile(patchFile)) {
-            ShareTinkerLog.e(TAG, "UpgradePatch tryPatch:patch file is not found, just return");
             return false;
         }
-        // 此类用于读取补丁包中的meta文件，并进行 校验
+        // 此类用于读取补丁包中的meta文件
         ShareSecurityCheck signatureCheck = new ShareSecurityCheck(context);
         // 解析并校验补丁的TinkerId、签名、MD5、meta文件等的合法性
         int returnCode = ShareTinkerInternals.checkTinkerPackage(context, manager.getTinkerFlags(), patchFile, signatureCheck);
         if (returnCode != ShareConstants.ERROR_PACKAGE_CHECK_OK) {
-            ShareTinkerLog.e(TAG, "UpgradePatch tryPatch:onPatchPackageCheckFail");
             manager.getPatchReporter().onPatchPackageCheckFail(patchFile, returnCode);
             return false;
         }
 
         String patchMd5 = SharePatchFileUtil.getMD5(patchFile);
         if (patchMd5 == null) {
-            ShareTinkerLog.e(TAG, "UpgradePatch tryPatch:patch md5 is null, just return");
             return false;
         }
-        //use md5 as version
+        // 补丁包md5作为版本号
         patchResult.patchVersion = patchMd5;
 
         ShareTinkerLog.i(TAG, "UpgradePatch tryPatch:patchMd5:%s", patchMd5);
@@ -94,7 +88,6 @@ public class UpgradePatch extends AbstractPatch {
         // 读取上一次合成补丁的信息
         SharePatchInfo oldInfo = SharePatchInfo.readAndCheckPropertyWithLock(patchInfoFile, patchInfoLockFile);
 
-        //it is a new patch, so we should not find a exist
         SharePatchInfo newInfo;
 
         if (oldInfo != null) {
@@ -110,9 +103,10 @@ public class UpgradePatch extends AbstractPatch {
                 manager.getPatchReporter().onPatchVersionCheckFail(patchFile, oldInfo, patchMd5);
                 return false;
             }
-            // 是否使用解释模式
+            // 当前是否以解释模式加载了补丁(系统OTA之后第一次运行)
+            // 在TinkerLoader中以解释模式加载了补丁，oatDir会被设为interpret
             final boolean usingInterpret = oldInfo.oatDir.equals(ShareConstants.INTERPRET_DEX_OPTIMIZE_PATH);
-            // 判断该补丁是否已合成过
+            // 判断该补丁是否已合成过，当前要合成的补丁已经被加载则不合成
             if (!usingInterpret && !ShareTinkerInternals.isNullOrNil(oldInfo.newVersion) && oldInfo.newVersion.equals(patchMd5) && !oldInfo.isRemoveNewVersion) {
                 ShareTinkerLog.e(TAG, "patch already applied, md5: %s", patchMd5);
 
@@ -121,8 +115,7 @@ public class UpgradePatch extends AbstractPatch {
 
                 return true;
             }
-            // TODO 解释模式
-            // 当前是解释模式运行，此时要合成补丁
+            // 当前是以解释模式加载补丁时，将oatDir设为changing，以便下次加载补丁时不再以解释模式加载
             final String finalOatDir = usingInterpret ? ShareConstants.CHANING_DEX_OPTIMIZE_PATH : oldInfo.oatDir;
             newInfo = new SharePatchInfo(oldInfo.oldVersion, patchMd5, isProtectedApp, false, Build.FINGERPRINT, finalOatDir, false);
         } else {
@@ -130,9 +123,6 @@ public class UpgradePatch extends AbstractPatch {
             newInfo = new SharePatchInfo("", patchMd5, isProtectedApp, false, Build.FINGERPRINT, ShareConstants.DEFAULT_DEX_OPTIMIZE_PATH, false);
         }
 
-        // it is a new patch, we first delete if there is any files
-        // don't delete dir for faster retry
-        // SharePatchFileUtil.deleteDir(patchVersionDirectory);
         final String patchName = SharePatchFileUtil.getPatchVersionDirectory(patchMd5);
         // data/data/包名/tinker/patch-xxx
         final String patchVersionDirectory = patchDirectory + "/" + patchName;
@@ -177,8 +167,7 @@ public class UpgradePatch extends AbstractPatch {
             return false;
         }
 
-        // check dex opt file at last, some phone such as VIVO/OPPO like to change dex2oat to interpreted
-        // 检查dex2oat产物是否有缺失
+        // 检查dex2oat产物是否有缺失，因为vivo/oppo会异步执行dex2oat
         if (!DexDiffPatchInternal.waitAndCheckDexOptFile(patchFile, manager)) {
             ShareTinkerLog.e(TAG, "UpgradePatch tryPatch:new patch recover, check dex opt file failed");
             return false;
@@ -190,12 +179,8 @@ public class UpgradePatch extends AbstractPatch {
             return false;
         }
 
-        // Reset patch apply retry count to let us be able to reapply without triggering
-        // patch apply disable when we apply it successfully previously.
+        // 重置记录的补丁合成次数
         UpgradePatchRetry.getInstance(context).onPatchResetMaxCheck(patchMd5);
-
-        ShareTinkerLog.w(TAG, "UpgradePatch tryPatch: done, it is ok");
         return true;
     }
-
 }

@@ -167,6 +167,7 @@ public class TinkerLoader extends AbstractTinkerLoader {
                 SharePatchInfo.rewritePatchInfoFileWithLock(patchInfoFile, patchInfo, patchInfoLockFile);
                 ShareTinkerInternals.killProcessExceptMain(app);
                 String patchVersionDirFullPath = patchDirectoryPath + "/" + patchName;
+                // data/data/包名/tinker/patch-xxx/interpet
                 SharePatchFileUtil.deleteDir(patchVersionDirFullPath + "/" + ShareConstants.INTERPRET_DEX_OPTIMIZE_PATH);
             }
         }
@@ -177,8 +178,7 @@ public class TinkerLoader extends AbstractTinkerLoader {
         boolean versionChanged = !(oldVersion.equals(newVersion));
         // 编译模式是否改变了 解释模式/aot模式
         boolean oatModeChanged = oatDex.equals(ShareConstants.CHANING_DEX_OPTIMIZE_PATH);
-        // 判断编译模式 odex/interpet
-        // 如果编译模式被标记为changing，当前在主进程时
+        // 如果当前oatDir为changing，判断编译模式， odex/interpet
         oatDex = ShareTinkerInternals.getCurrentOatMode(app, oatDex);
         resultIntent.putExtra(ShareIntentUtil.INTENT_PATCH_OAT_DIR, oatDex);
 
@@ -200,7 +200,7 @@ public class TinkerLoader extends AbstractTinkerLoader {
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_VERSION_DIRECTORY_NOT_EXIST);
             return;
         }
-        // 待加载的补丁路径 tinker/patch.info/patch-641e634c
+        // 待加载的补丁路径 data/data/包名/tinker/patch-641e634c
         String patchVersionDirectory = patchDirectoryPath + "/" + patchName;
 
         File patchVersionDirectoryFile = new File(patchVersionDirectory);
@@ -340,6 +340,7 @@ public class TinkerLoader extends AbstractTinkerLoader {
             if (isSystemOTA) {
                 // update fingerprint after load success
                 patchInfo.fingerPrint = Build.FINGERPRINT;
+                // ota后第一次启动加载补丁成功，oatDir = interpet
                 patchInfo.oatDir = loadTinkerJars ? ShareConstants.INTERPRET_DEX_OPTIMIZE_PATH : ShareConstants.DEFAULT_DEX_OPTIMIZE_PATH;
                 // reset to false
                 oatModeChanged = false;
@@ -349,7 +350,7 @@ public class TinkerLoader extends AbstractTinkerLoader {
                     ShareTinkerLog.w(TAG, "tryLoadPatchFiles:onReWritePatchInfoCorrupted");
                     return;
                 }
-                // update oat dir
+                // intent中设置oatDir为interpret
                 resultIntent.putExtra(ShareIntentUtil.INTENT_PATCH_OAT_DIR, patchInfo.oatDir);
             }
             if (!loadTinkerJars) {

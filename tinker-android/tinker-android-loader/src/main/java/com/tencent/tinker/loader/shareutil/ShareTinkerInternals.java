@@ -447,8 +447,10 @@ public class ShareTinkerInternals {
     public static String getCurrentOatMode(Context context, String current) {
         if (current.equals(ShareConstants.CHANING_DEX_OPTIMIZE_PATH)) {
             if (isInMainProcess(context)) {
+                // changing 主进程时 = odex
                 current = ShareConstants.DEFAULT_DEX_OPTIMIZE_PATH;
             } else {
+                // changing 非主进程时 = interpet
                 current = ShareConstants.INTERPRET_DEX_OPTIMIZE_PATH;
             }
         }

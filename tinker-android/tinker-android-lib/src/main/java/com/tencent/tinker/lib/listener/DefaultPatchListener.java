@@ -62,7 +62,6 @@ public class DefaultPatchListener implements PatchListener {
         // 差异apk md5
         final String patchMD5 = SharePatchFileUtil.getMD5(patchFile);
         // 校验补丁
-        // Tag1============================
         // 检查是否应该合成该补丁
         // 补丁不合法/正在合成补丁/系统OTA后第一次启动/该版本补丁已经被加载/该版本补丁已经合成还未加载/该补丁合并失败超过阈值
         final int returnCode = patchCheck(path, patchMD5);
@@ -141,7 +140,7 @@ public class DefaultPatchListener implements PatchListener {
         if (ShareTinkerInternals.isVmJit()) {
             return ShareConstants.ERROR_PATCH_JIT;
         }
-        // 此次加载补丁的信息
+        // 此次启动加载补丁的信息
         final TinkerLoadResult loadResult = manager.getTinkerLoadResultIfPresent();
         // 当前是否在以解释模式运行，true则说明需要重新做dexopt
         final boolean repairOptNeeded = manager.isMainProcess()

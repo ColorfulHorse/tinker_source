@@ -329,6 +329,7 @@ public class TinkerLoadResult {
                 packageConfig = ShareIntentUtil.getIntentPackageConfig(intentResult);
 
                 if (useInterpretMode) {
+                    // 当前是解释模式加载的补丁，这里重新做后台dex2oat全量编译
                     tinker.getLoadReporter().onLoadInterpret(ShareConstants.TYPE_INTERPRET_OK, null);
                 }
                 if (isMainProcess && versionChanged) {

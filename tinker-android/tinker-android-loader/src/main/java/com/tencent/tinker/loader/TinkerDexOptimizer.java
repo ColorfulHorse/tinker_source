@@ -149,22 +149,20 @@ public final class TinkerDexOptimizer {
                 String optimizedPath = SharePatchFileUtil.optimizedPathFor(this.dexFile, this.optimizedDir);
                 if (!ShareTinkerInternals.isArkHotRuning()) {
                     if (useInterpretMode) {
-                        // 以解释模式编译
+                        // 以解释模式编译，系统OTA后第一次运行时执行此分支
                         interpretDex2Oat(dexFile.getAbsolutePath(), optimizedPath);
                     } else if (Build.VERSION.SDK_INT >= 26
                             || (Build.VERSION.SDK_INT >= 25 && Build.VERSION.PREVIEW_SDK_INT != 0)) {
                         // 通过PathClassLoader/加载dex触发dex2oat
                         NewClassLoaderInjector.triggerDex2Oat(context, optimizedDir,
                                                               useDLC, dexFile.getAbsolutePath());
-                        // Android Q is significantly slowed down by Fallback Dex Loading procedure, so we
-                        // trigger background dexopt to generate executable odex here.
                         // https://developer.android.google.cn/about/versions/10/behavior-changes-10?hl=zh-cn#system-only-oat
                         // android10以后不再从应用进程调用dex2oat，仅接受系统生成的OAT文件
                         // oat_file_manager.cc  OatFileManager::OpenDexFilesFromOat不再调用oat_file_assistant.MakeUpToDate
-                        // 这里通过pms触发后台dex2oat
+                        // 这里通过pms再次触发后台dex2oat
                         triggerPMDexOptOnDemand(context, dexFile.getAbsolutePath(), optimizedPath);
                     } else {
-                        // 直接使用DexFile触发dex2oat
+                        // android8.0 之下直接使用DexFile触发dex2oat
                         DexFile.loadDex(dexFile.getAbsolutePath(), optimizedPath, 0);
                     }
                 }
@@ -207,6 +205,7 @@ public final class TinkerDexOptimizer {
                 // Take a rest. And hope any asynchronous mechanism may generate odex we need.
                 SystemClock.sleep(1000);
                 if (!performDexOptSecondarySuccess || !oatFile.exists()) {
+                    // 执行失败，如果是华为系统做额外处理
                     if ("huawei".equalsIgnoreCase(Build.MANUFACTURER) || "honor".equalsIgnoreCase(Build.MANUFACTURER)) {
                         registerDexModule(context, dexPath, oatPath);
                     }
@@ -228,6 +227,7 @@ public final class TinkerDexOptimizer {
                 // 反射获取pms代理用于ipc标记pms.performDexOptSecondary方法的transactionCode
                 final int transactionCode = queryPerformDexOptSecondaryTransactionCode();
                 final String packageName = context.getPackageName();
+                // dex2oat编译模式
                 final String targetCompilerFilter = "quicken";
                 final boolean force = false;
 

@@ -59,8 +59,11 @@ public class SystemClassLoaderAdder {
             files = createSortedAdditionalPathEntries(files);
             ClassLoader classLoader = loader;
             if (Build.VERSION.SDK_INT >= 24 && !isProtectedApp) {
+                // 7.0之后创建新CClassLoader替换原ClassLoader避免混合编译带来的问题
                 classLoader = NewClassLoaderInjector.inject(application, loader, dexOptDir, useDLC, files);
             } else {
+                // 加固也不替换ClassLoader
+                // android7.0之前直接将补丁dex插入原ClassLoader中pathList中dexElements最前面
                 injectDexesInternal(classLoader, files, dexOptDir);
             }
             //install done
