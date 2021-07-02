@@ -49,11 +49,13 @@ public class TinkerResourceLoader {
         if (resPatchInfo == null || resPatchInfo.resArscMd5 == null) {
             return true;
         }
+        // data/data/包名/tinker/patch-xxx/res/resources.apk
         String resourceString = directory + "/" + RESOURCE_PATH +  "/" + RESOURCE_FILE;
         File resourceFile = new File(resourceString);
         long start = System.currentTimeMillis();
 
         if (application.isTinkerLoadVerifyFlag()) {
+            // 校验arsc文件md5
             if (!SharePatchFileUtil.checkResourceArscMd5(resourceFile, resPatchInfo.resArscMd5)) {
                 ShareTinkerLog.e(TAG, "Failed to load resource file, path: " + resourceFile.getPath() + ", expect md5: " + resPatchInfo.resArscMd5);
                 ShareIntentUtil.setIntentReturnCode(intentResult, ShareConstants.ERROR_LOAD_PATCH_VERSION_RESOURCE_MD5_MISMATCH);
@@ -66,7 +68,7 @@ public class TinkerResourceLoader {
             ShareTinkerLog.i(TAG, "monkeyPatchExistingResources resource file:" + resourceString + ", use time: " + (System.currentTimeMillis() - start));
         } catch (Throwable e) {
             ShareTinkerLog.e(TAG, "install resources failed");
-            //remove patch dex if resource is installed failed
+            // 加载资源失败移除补丁
             try {
                 SystemClassLoaderAdder.uninstallPatchDex(application.getClassLoader());
             } catch (Throwable throwable) {

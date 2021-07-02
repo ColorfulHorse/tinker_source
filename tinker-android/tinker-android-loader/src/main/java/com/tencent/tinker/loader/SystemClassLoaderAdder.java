@@ -59,7 +59,7 @@ public class SystemClassLoaderAdder {
             files = createSortedAdditionalPathEntries(files);
             ClassLoader classLoader = loader;
             if (Build.VERSION.SDK_INT >= 24 && !isProtectedApp) {
-                // 7.0之后创建新CClassLoader替换原ClassLoader避免混合编译带来的问题
+                // 7.0之后创建新ClassLoader替换原ClassLoader避免混合编译带来的问题
                 classLoader = NewClassLoaderInjector.inject(application, loader, dexOptDir, useDLC, files);
             } else {
                 // 加固也不替换ClassLoader
@@ -69,7 +69,7 @@ public class SystemClassLoaderAdder {
             //install done
             sPatchDexCount = files.size();
             ShareTinkerLog.i(TAG, "after loaded classloader: " + classLoader + ", dex size:" + sPatchDexCount);
-
+            // 反射TinkerTestDexLoad.isPatch判断是否加载成功
             if (!checkDexInstall(classLoader)) {
                 //reset patch dex
                 SystemClassLoaderAdder.uninstallPatchDex(classLoader);
@@ -221,14 +221,12 @@ public class SystemClassLoaderAdder {
                                     File optimizedDirectory)
             throws IllegalArgumentException, IllegalAccessException,
             NoSuchFieldException, InvocationTargetException, NoSuchMethodException, IOException {
-            /* The patched class loader is expected to be a descendant of
-             * dalvik.system.BaseDexClassLoader. We modify its
-             * dalvik.system.DexPathList pathList field to append additional DEX
-             * file entries.
-             */
+            // 获取BaseDexClassLoader.pathList
             Field pathListField = ShareReflectUtil.findField(loader, "pathList");
             Object dexPathList = pathListField.get(loader);
             ArrayList<IOException> suppressedExceptions = new ArrayList<IOException>();
+            // makePathElements反射调用DexPathList.makePathElements/makeDexElements得到Element数组
+            // 将补丁dex生成的Element数组插入DexPathList.dexElements
             ShareReflectUtil.expandFieldArray(dexPathList, "dexElements", makePathElements(dexPathList,
                 new ArrayList<File>(additionalClassPathEntries), optimizedDirectory,
                 suppressedExceptions));

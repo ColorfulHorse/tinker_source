@@ -24,10 +24,13 @@ public abstract class Interceptor<T_TARGET> {
 
     public synchronized void install() throws InterceptFailedException {
         try {
+            // fetchTarget获取要hook的实例，比如AMS客户端代理（IBinder对象）
             final T_TARGET target = fetchTarget();
             mTarget = target;
+            // 创建将要hook对象的动态代理
             final T_TARGET decorated = decorate(target);
             if (decorated != target) {
+                // 动态代理对象替换掉原对象完成hook
                 inject(decorated);
             } else {
                 ShareTinkerLog.w(TAG, "target: " + target + " was already hooked.");

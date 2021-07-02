@@ -47,6 +47,8 @@ public class PMSInterceptHandler implements ServiceBinderInterceptor.BinderInvoc
                     ++compNameIdx;
                 }
                 if (componentName != null) {
+                    // 根据componentName获取补丁新增的ActivityInfo返回给PMS.getActivityInfo
+                    // 因为AMS记录的是代理proxy activity，而实际运行的并不是
                     return IncrementComponentManager.queryActivityInfo(componentName.getClassName());
                 } else {
                     ShareTinkerLog.w(TAG, "failed to locate componentName field of " + method.getName()
@@ -87,6 +89,7 @@ public class PMSInterceptHandler implements ServiceBinderInterceptor.BinderInvoc
                     ++intentIdx;
                 }
                 if (intent != null) {
+                    // 根据componentName获取新增的Activity的ResolveInfo返回
                     return IncrementComponentManager.resolveIntent(intent);
                 } else {
                     ShareTinkerLog.w(TAG, "failed to locate intent field of " + method.getName()

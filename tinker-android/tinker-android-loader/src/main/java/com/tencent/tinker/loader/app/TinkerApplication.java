@@ -127,13 +127,14 @@ public abstract class TinkerApplication extends Application {
                                       long applicationStartMillisTime,
                                       Intent resultIntent) {
         try {
-            // Use reflection to create the delegate so it doesn't need to go into the primary dex.
-            // And we can also patch it
+            // 使用替换后的classLoader反射ApplicationLike类
             final Class<?> delegateClass = Class.forName(delegateClassName, false, mCurrentClassLoader);
             final Constructor<?> constructor = delegateClass.getConstructor(Application.class, int.class, boolean.class,
                     long.class, long.class, Intent.class);
+            // 创建ApplicationLike实例
             final Object appLike = constructor.newInstance(app, tinkerFlags, tinkerLoadVerifyFlag,
                     applicationStartElapsedTime, applicationStartMillisTime, resultIntent);
+            // 反射创建TinkerApplicationInlineFence
             final Class<?> inlineFenceClass = Class.forName(
                     "com.tencent.tinker.entry.TinkerApplicationInlineFence", false, mCurrentClassLoader);
             final Class<?> appLikeClass = Class.forName(
@@ -150,12 +151,13 @@ public abstract class TinkerApplication extends Application {
         try {
             // 反射调用loader类的tryLoad方法
             // 因为开发者可以自定义拓展loader，所以根据ApplicationLike中配置的loader类名反射调用
-            // tag1-----------------
+            // 加载补丁
             loadTinker();
-            mCurrentClassLoader = base.getClassLoader();
+            // loadTinker已经将app PathClassLoader替换，这里是替换后的cl
             mInlineFence = createInlineFence(this, tinkerFlags, delegateClassName,
                     tinkerLoadVerifyFlag, applicationStartElapsedTime, applicationStartMillisTime,
                     tinkerResultIntent);
+            // 回调ApplicationLike onBaseContextAttached
             TinkerInlineFenceAction.callOnBaseContextAttached(mInlineFence, base);
             //reset save mode
             if (useSafeMode) {

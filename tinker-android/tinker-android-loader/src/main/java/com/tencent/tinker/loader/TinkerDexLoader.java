@@ -46,10 +46,10 @@ public class TinkerDexLoader {
     private static final String DEFAULT_DEX_OPTIMIZE_PATH   = ShareConstants.DEFAULT_DEX_OPTIMIZE_PATH;
     private static final String INTERPRET_DEX_OPTIMIZE_PATH = ShareConstants.INTERPRET_DEX_OPTIMIZE_PATH;
 
+    // dalvik下需要加载的dex
     private static final ArrayList<ShareDexDiffPatchInfo> LOAD_DEX_LIST = new ArrayList<>();
 
-
-    // private static File testOptDexFile;
+    // art下需要加载的dex
     private static HashSet<ShareDexDiffPatchInfo> classNDexInfo = new HashSet<>();
 
     private static boolean isVmArt = ShareTinkerInternals.isVmArt();
@@ -79,10 +79,11 @@ public class TinkerDexLoader {
         }
         String dexPath = directory + "/" + DEX_PATH + "/";
 
+        // 需要加载的dex集合
         ArrayList<File> legalFiles = new ArrayList<>();
 
         for (ShareDexDiffPatchInfo info : LOAD_DEX_LIST) {
-            //for dalvik, ignore art support dex
+            // dalvik下跳过没有改变的非主dex
             if (isJustArtSupportDex(info)) {
                 continue;
             }
@@ -93,8 +94,8 @@ public class TinkerDexLoader {
             if (application.isTinkerLoadVerifyFlag()) {
                 long start = System.currentTimeMillis();
                 String checkMd5 = getInfoMd5(info);
+                // 校验合成后dex MD5和dex_meta中md5
                 if (!SharePatchFileUtil.verifyDexFileMd5(file, checkMd5)) {
-                    //it is good to delete the mismatch file
                     ShareIntentUtil.setIntentReturnCode(intentResult, ShareConstants.ERROR_LOAD_PATCH_VERSION_DEX_MD5_MISMATCH);
                     intentResult.putExtra(ShareIntentUtil.INTENT_PATCH_MISMATCH_DEX_PATH,
                         file.getAbsolutePath());
@@ -104,13 +105,15 @@ public class TinkerDexLoader {
             }
             legalFiles.add(file);
         }
-        // verify merge classN.apk
         if (isVmArt && !classNDexInfo.isEmpty()) {
+            // art下所有dex合成为tinker_classN.apk然后dex2oat生成了tinker_classN.odex
+            // 合成后的tinker_classN.apk，art下加载时会自动寻找相应的tinker_classN.odex文件
             File classNFile = new File(dexPath + ShareConstants.CLASS_N_APK_NAME);
             long start = System.currentTimeMillis();
 
             if (application.isTinkerLoadVerifyFlag()) {
                 for (ShareDexDiffPatchInfo info : classNDexInfo) {
+                    // 校验合成后dex MD5和dex_meta中md5
                     if (!SharePatchFileUtil.verifyDexFileMd5(classNFile, info.rawName, info.destMd5InArt)) {
                         ShareIntentUtil.setIntentReturnCode(intentResult, ShareConstants.ERROR_LOAD_PATCH_VERSION_DEX_MD5_MISMATCH);
                         intentResult.putExtra(ShareIntentUtil.INTENT_PATCH_MISMATCH_DEX_PATH,
@@ -130,6 +133,7 @@ public class TinkerDexLoader {
             final Throwable[] parallelOTAThrowable = new Throwable[1];
             String targetISA;
             try {
+                // 获取cpu指令集
                 targetISA = ShareTinkerInternals.getCurrentInstructionSet();
             } catch (Throwable throwable) {
                 ShareTinkerLog.i(TAG, "getCurrentInstructionSet fail:" + throwable);
@@ -144,13 +148,13 @@ public class TinkerDexLoader {
                 return false;
                 // }
             }
-
+            // 删除失效的oat文件
             deleteOutOfDateOATFile(directory);
 
             ShareTinkerLog.w(TAG, "systemOTA, try parallel oat dexes, targetISA:" + targetISA);
             // data/data/包名/tinker/patch-xxx/interpret
             optimizeDir = new File(directory + "/" + INTERPRET_DEX_OPTIMIZE_PATH);
-
+            // 解释模式dex2oat
             TinkerDexOptimizer.optimizeAll(
                   application, legalFiles, optimizeDir, true,
                   application.isUseDelegateLastClassLoader(), targetISA,
@@ -188,6 +192,7 @@ public class TinkerDexLoader {
         }
         try {
             final boolean useDLC = application.isUseDelegateLastClassLoader();
+            // 开始加载
             SystemClassLoaderAdder.installDexes(application, classLoader, optimizeDir, legalFiles, isProtectedApp, useDLC);
         } catch (Throwable e) {
             ShareTinkerLog.e(TAG, "install dexes failed");
@@ -200,10 +205,7 @@ public class TinkerDexLoader {
     }
 
     /**
-     * all the dex files in meta file exist?
-     * fast check, only check whether exist
-     *
-     * @return boolean
+     * 校验要加载的dex以及对于的odex是否存在
      */
     public static boolean checkComplete(String directory, ShareSecurityCheck securityCheck, String oatDir, Intent intentResult) {
         String meta = securityCheck.getMetaContentMap().get(DEX_MEAT_FILE);
@@ -221,14 +223,13 @@ public class TinkerDexLoader {
         if (allDexInfo.isEmpty()) {
             return true;
         }
-
+        // 真正需要加载的dex文件
         HashMap<String, String> dexes = new HashMap<>();
 
         ShareDexDiffPatchInfo testInfo = null;
 
         for (ShareDexDiffPatchInfo info : allDexInfo) {
-            // dalvik对于多dex处理和art不同，dalvik一开始只会对主dex进行dexopt
-            // 所以在dalvik下这里忽略主dex之外的dex
+            // dalvik下跳过没有修改过的非主dex
             if (isJustArtSupportDex(info)) {
                 continue;
             }
@@ -238,13 +239,15 @@ public class TinkerDexLoader {
                 return false;
             }
             if (isVmArt && info.rawName.startsWith(ShareConstants.TEST_DEX_NAME)) {
-                // test.dex
+                // test.dex用于校验补丁是否加载成功
+                // test.dex中TinkerTestDexLoad.isPatch为true
+                // 补丁加载成功后会覆盖loader中TinkerTestDexLoad.isPatch
                 testInfo = info;
             } else if (isVmArt && ShareConstants.CLASS_N_PATTERN.matcher(info.realName).matches()) {
                 // art下所有classesN.dex
                 classNDexInfo.add(info);
             } else {
-                // dalvik主dex
+                // dalvik下主dex以及修改过的非主dex
                 dexes.put(info.realName, getInfoMd5(info));
                 LOAD_DEX_LIST.add(info);
             }
@@ -258,7 +261,7 @@ public class TinkerDexLoader {
             // art下合并补丁时会将所有classesN.dex打包到tinker_classN.apk
             dexes.put(ShareConstants.CLASS_N_APK_NAME, "");
         }
-        //tinker/patch.info/patch-641e634c/dex
+        // .../patch-641e634c/dex
         String dexDirectory = directory + "/" + DEX_PATH + "/";
 
         File dexDir = new File(dexDirectory);
@@ -267,12 +270,12 @@ public class TinkerDexLoader {
             ShareIntentUtil.setIntentReturnCode(intentResult, ShareConstants.ERROR_LOAD_PATCH_VERSION_DEX_DIRECTORY_NOT_EXIST);
             return false;
         }
-        // tinker/patch.info/patch-641e634c/odex(oat) 优化/aot后的dex路径
+        // .../patch-641e634c/odex odex文件路径
         String optimizeDexDirectory = directory + "/" + oatDir + "/";
         File optimizeDexDirectoryFile = new File(optimizeDexDirectory);
 
-        //fast check whether there is any dex files missing
         for (String name : dexes.keySet()) {
+            // dex文件 .../patch-641e634c/dex/xxx.dex(tinker_classN.apk)
             File dexFile = new File(dexDirectory + name);
 
             if (!SharePatchFileUtil.isLegalFile(dexFile)) {
@@ -280,9 +283,10 @@ public class TinkerDexLoader {
                 ShareIntentUtil.setIntentReturnCode(intentResult, ShareConstants.ERROR_LOAD_PATCH_VERSION_DEX_FILE_NOT_EXIST);
                 return false;
             }
-            //check dex opt whether complete also
+            // 真实odex文件路径 .../patch-md5/odex/xxx.odex 或 .../patch-md5/oat/<isa>/xxx.odex
             File dexOptFile = new File(SharePatchFileUtil.optimizedPathFor(dexFile, optimizeDexDirectoryFile));
             if (!SharePatchFileUtil.isLegalFile(dexOptFile)) {
+                // hack 某些rom异步dex2oat，没有实际生成oat文件
                 if (SharePatchFileUtil.shouldAcceptEvenIfIllegal(dexOptFile)) {
                     continue;
                 }
@@ -321,7 +325,7 @@ public class TinkerDexLoader {
         }
 
         String destMd5InDvm = dexDiffPatchInfo.destMd5InDvm;
-        // dalvik下非主dex该字段值为"0"
+        // dalvik下非主dex并且对于dex没有改变，则该字段值为"0"
         if (destMd5InDvm.equals("0")) {
             return true;
         }

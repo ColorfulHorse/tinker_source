@@ -340,6 +340,7 @@ public final class IncrementComponentManager {
     };
 
     public static synchronized boolean init(Context context, ShareSecurityCheck checker) throws IOException {
+        // 检查inc_component_meta判断是否有新增组件
         if (!checker.getMetaContentMap().containsKey(EnvConsts.INCCOMPONENT_META_FILE)) {
             ShareTinkerLog.i(TAG, "package has no incremental component meta, skip init.");
             return false;
@@ -365,6 +366,7 @@ public final class IncrementComponentManager {
                     case XmlPullParser.START_TAG:
                         final String tagName = parser.getName();
                         if ("activity".equalsIgnoreCase(tagName)) {
+                            // 解析xml Activity节点为ActivityInfo实例并保存
                             final ActivityInfo aInfo = parseActivity(context, parser);
                             CLASS_NAME_TO_ACTIVITY_INFO_MAP.put(aInfo.name, aInfo);
                         } else if ("service".equalsIgnoreCase(tagName)) {

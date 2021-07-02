@@ -68,6 +68,8 @@ public class MHMessageHandler implements MessageHandler {
                     ShareTinkerLog.w(TAG, "msg: [" + msg.what + "] has no 'obj' value.");
                     return false;
                 }
+
+                // 反射ActivityClientRecord.intent获取之前startActivity传给ams的intent
                 final Field intentField = ShareReflectUtil.findField(activityClientRecord, "intent");
                 final Intent maybeHackedIntent = (Intent) intentField.get(activityClientRecord);
                 if (maybeHackedIntent == null) {
@@ -76,24 +78,28 @@ public class MHMessageHandler implements MessageHandler {
                 }
 
                 ShareIntentUtil.fixIntentClassLoader(maybeHackedIntent, mContext.getClassLoader());
-
+                // 获取原始activity ComponentName
                 final ComponentName oldComponent = maybeHackedIntent.getParcelableExtra(EnvConsts.INTENT_EXTRA_OLD_COMPONENT);
                 if (oldComponent == null) {
                     ShareTinkerLog.w(TAG, "oldComponent was null, start " + maybeHackedIntent.getComponent() + " next.");
                     return false;
                 }
                 final Field activityInfoField = ShareReflectUtil.findField(activityClientRecord, "activityInfo");
+                // 代理activityInfo
                 final ActivityInfo aInfo = (ActivityInfo) activityInfoField.get(activityClientRecord);
                 if (aInfo == null) {
                     return false;
                 }
+                // 原始activityInfo
                 final ActivityInfo targetAInfo = IncrementComponentManager.queryActivityInfo(oldComponent.getClassName());
                 if (targetAInfo == null) {
                     ShareTinkerLog.e(TAG, "Failed to query target activity's info,"
                             + " perhaps the target is not hotpluged component. Target: " + oldComponent.getClassName());
                     return false;
                 }
+                // 由于代理activity没有screenOrientation信息，这里需要还原target Activity相关信息
                 fixActivityScreenOrientation(activityClientRecord, targetAInfo.screenOrientation);
+                // target activityInfo字段copy到代理activityInfo，并替换componentName为target的
                 fixStubActivityInfo(aInfo, targetAInfo);
                 maybeHackedIntent.setComponent(oldComponent);
                 maybeHackedIntent.removeExtra(EnvConsts.INTENT_EXTRA_OLD_COMPONENT);

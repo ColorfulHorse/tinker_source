@@ -85,7 +85,9 @@ public class AMSInterceptHandler implements BinderInvocationHandler {
             }
         }
         if (intentIdx != -1) {
+            // target activity intent
             final Intent newIntent = new Intent((Intent) args[intentIdx]);
+            // 替换activity
             processActivityIntent(newIntent);
             args[intentIdx] = newIntent;
         }
@@ -134,6 +136,7 @@ public class AMSInterceptHandler implements BinderInvocationHandler {
     }
 
     private void processActivityIntent(Intent intent) {
+        // 原始activity包名和类名
         String origPackageName = null;
         String origClassName = null;
         if (intent.getComponent() != null) {
@@ -152,15 +155,21 @@ public class AMSInterceptHandler implements BinderInvocationHandler {
         if (IncrementComponentManager.isIncrementActivity(origClassName)) {
             final ActivityInfo origInfo = IncrementComponentManager.queryActivityInfo(origClassName);
             final boolean isTransparent = hasTransparentTheme(origInfo);
+            // 根据将要跳转的activity信息得到tinker预先注册的代理activity类名
+            // tinker loader manifest预先注册了一些activity，比如ActivityStubs$STDStub_00
             final String stubClassName = ActivityStubManager.assignStub(origClassName, origInfo.launchMode, isTransparent);
+            // 用代理activity替换原activity
             storeAndReplaceOriginalComponentName(intent, origPackageName, origClassName, stubClassName);
         }
     }
 
     private void storeAndReplaceOriginalComponentName(Intent intent, String origPackageName, String origClassName, String stubClassName) {
         final ComponentName origComponentName = new ComponentName(origPackageName, origClassName);
+        // 设置用于解析parcel的classLoader
         ShareIntentUtil.fixIntentClassLoader(intent, mContext.getClassLoader());
+        // intent bundle中添加原始componentName信息，以便AMS处理完成后再替换回来
         intent.putExtra(EnvConsts.INTENT_EXTRA_OLD_COMPONENT, origComponentName);
+        // intent设置componentName为代理activity的
         final ComponentName stubComponentName = new ComponentName(origPackageName, stubClassName);
         intent.setComponent(stubComponentName);
     }

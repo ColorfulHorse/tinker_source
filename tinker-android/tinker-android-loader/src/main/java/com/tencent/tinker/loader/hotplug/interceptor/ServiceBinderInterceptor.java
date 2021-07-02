@@ -32,7 +32,9 @@ public class ServiceBinderInterceptor extends Interceptor<IBinder> {
     private final BinderInvocationHandler mBinderInvocationHandler;
 
     private static Class<?> sServiceManagerClazz = null;
+    // ServiceManager.sCache
     private static Field sSCacheField = null;
+    // ServiceManager.getService
     private static Method sGetServiceMethod = null;
 
     static {
@@ -81,10 +83,13 @@ public class ServiceBinderInterceptor extends Interceptor<IBinder> {
     @Override
     protected void inject(IBinder decorated) throws Throwable {
         final Map<String, IBinder> sCache = (Map<String, IBinder>) sSCacheField.get(null);
+        // ServiceManager.sCache保存远程服务在客户端的代理，这里将其中AMS/PMS代理替换成tinker创建的动态代理对象
         sCache.put(mServiceName, decorated);
         if (Context.ACTIVITY_SERVICE.equals(mServiceName)) {
+            // 将ActivityManagerNative/ActivityManager中的AMS客户端代理对象也进行替换
             fixAMSBinderCache(decorated);
         } else if (EnvConsts.PACKAGE_MANAGER_SRVNAME.equals(mServiceName)) {
+            // 将ActivityThread.sPackageManager，ApplicationPackageManager.mPM也替换掉
             fixPMSBinderCache(mBaseContext, decorated);
         }
     }

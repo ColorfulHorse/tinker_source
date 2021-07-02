@@ -19,6 +19,7 @@ package com.tencent.tinker.loader;
 import android.content.Intent;
 import android.os.Build;
 import android.os.SystemClock;
+import android.view.View;
 
 import com.tencent.tinker.loader.app.TinkerApplication;
 import com.tencent.tinker.loader.hotplug.ComponentHotplug;
@@ -53,7 +54,6 @@ public class TinkerLoader extends AbstractTinkerLoader {
         ShareTinkerLog.d(TAG, "tryLoad test test");
         // intent记录加载补丁的信息
         Intent resultIntent = new Intent();
-
         long begin = SystemClock.elapsedRealtime();
         tryLoadPatchFilesInternal(app, resultIntent);
         long cost = SystemClock.elapsedRealtime() - begin;
@@ -65,35 +65,28 @@ public class TinkerLoader extends AbstractTinkerLoader {
         final int tinkerFlag = app.getTinkerFlags();
         // 是否启用
         if (!ShareTinkerInternals.isTinkerEnabled(tinkerFlag)) {
-            ShareTinkerLog.w(TAG, "tryLoadPatchFiles: tinker is disable, just return");
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_DISABLE);
             return;
         }
         // 是否在:patch进程，patch进程用来合成，并不用来加载
         if (ShareTinkerInternals.isInPatchProcess(app)) {
-            ShareTinkerLog.w(TAG, "tryLoadPatchFiles: we don't load patch with :patch process itself, just return");
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_DISABLE);
             return;
         }
-        // 获取用于合成patch的目录
+        // 校验补丁目录以及文件是否存在
         File patchDirectoryFile = SharePatchFileUtil.getPatchDirectory(app);
         if (patchDirectoryFile == null) {
-            ShareTinkerLog.w(TAG, "tryLoadPatchFiles:getPatchDirectory == null");
-            //treat as not exist
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_DIRECTORY_NOT_EXIST);
             return;
         }
         String patchDirectoryPath = patchDirectoryFile.getAbsolutePath();
         if (!patchDirectoryFile.exists()) {
-            ShareTinkerLog.w(TAG, "tryLoadPatchFiles:patch dir not exist:" + patchDirectoryPath);
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_DIRECTORY_NOT_EXIST);
             return;
         }
 
-        // 获取patch.info文件
+        // patch.info文件是否存在
         File patchInfoFile = SharePatchFileUtil.getPatchInfoFile(patchDirectoryPath);
-
-        //check patch info file whether exist
         if (!patchInfoFile.exists()) {
             ShareTinkerLog.w(TAG, "tryLoadPatchFiles:patch info not exist:" + patchInfoFile.getAbsolutePath());
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_INFO_NOT_EXIST);
@@ -110,14 +103,12 @@ public class TinkerLoader extends AbstractTinkerLoader {
 
         final boolean isProtectedApp = patchInfo.isProtectedApp;
         resultIntent.putExtra(ShareIntentUtil.INTENT_IS_PROTECTED_APP, isProtectedApp);
-
+        // 上一次加载的补丁版本
         String oldVersion = patchInfo.oldVersion;
+        // 当前需要加载的补丁版本
         String newVersion = patchInfo.newVersion;
         String oatDex = patchInfo.oatDir;
-
         if (oldVersion == null || newVersion == null || oatDex == null) {
-            //it is nice to clean patch
-            ShareTinkerLog.w(TAG, "tryLoadPatchFiles:onPatchInfoCorrupted");
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_INFO_CORRUPTED);
             return;
         }
@@ -127,13 +118,10 @@ public class TinkerLoader extends AbstractTinkerLoader {
 
         if (mainProcess) {
             final String patchName = SharePatchFileUtil.getPatchVersionDirectory(newVersion);
-            // So far new version is not loaded in main process and other processes.
-            // We can remove new version directory safely.
-            // 是否清除新补丁，如果补丁没有被加载，则可以直接删除
+            // 是否清除所有补丁，若补丁被加载过需要重置patch.info并杀死主进程以外所有进程
             if (isRemoveNewVersion) {
-                ShareTinkerLog.w(TAG, "found clean patch mark and we are in main process, delete patch file now.");
                 if (patchName != null) {
-                    // 新旧版本号相同说明补丁已经被加载过
+                    // 新旧版本号相同说明该补丁之前被加载过
                     final boolean isNewVersionLoadedBefore = oldVersion.equals(newVersion);
                     // 重置补丁信息
                     if (isNewVersionLoadedBefore) {
@@ -144,25 +132,21 @@ public class TinkerLoader extends AbstractTinkerLoader {
                     patchInfo.newVersion = newVersion;
                     patchInfo.isRemoveNewVersion = false;
                     SharePatchInfo.rewritePatchInfoFileWithLock(patchInfoFile, patchInfo, patchInfoLockFile);
-                    // 删除补丁
+                    // 删除补丁文件
                     String patchVersionDirFullPath = patchDirectoryPath + "/" + patchName;
                     SharePatchFileUtil.deleteDir(patchVersionDirFullPath);
 
                     if (isNewVersionLoadedBefore) {
-                        // 如果已经加载了补丁，则杀死patch(合成补丁)进程
+                        // 如果已经加载过补丁，则杀死其他进程
                         ShareTinkerInternals.killProcessExceptMain(app);
                         ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_DIRECTORY_NOT_EXIST);
                         return;
                     }
                 }
             }
-            // OTA
             // 是否删除解释编译产生的odex文件
             if (patchInfo.isRemoveInterpretOATDir) {
-                // delete interpret odex
-                // for android o, directory change. Fortunately, we don't need to support android o interpret mode any more
-                ShareTinkerLog.i(TAG, "tryLoadPatchFiles: isRemoveInterpretOATDir is true, try to delete interpret optimize files");
-                // 重写patch.info删除odex标识，然后杀死patch进程并且删除odex文件
+                // 重写patch.info删除odex标识，然后杀死其他进程并且删除odex文件
                 patchInfo.isRemoveInterpretOATDir = false;
                 SharePatchInfo.rewritePatchInfoFileWithLock(patchInfoFile, patchInfo, patchInfoLockFile);
                 ShareTinkerInternals.killProcessExceptMain(app);
@@ -174,11 +158,11 @@ public class TinkerLoader extends AbstractTinkerLoader {
 
         resultIntent.putExtra(ShareIntentUtil.INTENT_PATCH_OLD_VERSION, oldVersion);
         resultIntent.putExtra(ShareIntentUtil.INTENT_PATCH_NEW_VERSION, newVersion);
-
+        // oldVersion和newVersion不同说明合成了新补丁，但是还没有加载过
         boolean versionChanged = !(oldVersion.equals(newVersion));
-        // 编译模式是否改变了 解释模式/aot模式
+        // changing代表后台dex2oat已经完成，切换到非解释模式
+        // 此时使用dex2oat生成的odex文件，删除解释模式的odex文件
         boolean oatModeChanged = oatDex.equals(ShareConstants.CHANING_DEX_OPTIMIZE_PATH);
-        // 如果当前oatDir为changing，判断编译模式， odex/interpet
         oatDex = ShareTinkerInternals.getCurrentOatMode(app, oatDex);
         resultIntent.putExtra(ShareIntentUtil.INTENT_PATCH_OAT_DIR, oatDex);
 
@@ -195,8 +179,6 @@ public class TinkerLoader extends AbstractTinkerLoader {
         // 待加载的补丁名：patch-641e634c
         String patchName = SharePatchFileUtil.getPatchVersionDirectory(version);
         if (patchName == null) {
-            ShareTinkerLog.w(TAG, "tryLoadPatchFiles:patchName is null");
-            //we may delete patch info file
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_VERSION_DIRECTORY_NOT_EXIST);
             return;
         }
@@ -206,19 +188,15 @@ public class TinkerLoader extends AbstractTinkerLoader {
         File patchVersionDirectoryFile = new File(patchVersionDirectory);
 
         if (!patchVersionDirectoryFile.exists()) {
-            ShareTinkerLog.w(TAG, "tryLoadPatchFiles:onPatchVersionDirectoryNotFound");
-            //we may delete patch info file
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_VERSION_DIRECTORY_NOT_EXIST);
             return;
         }
 
-        // 补丁文件：tinker/patch.info/patch-641e634c/patch-641e634c.apk
         final String patchVersionFileRelPath = SharePatchFileUtil.getPatchVersionFile(version);
+        // 补丁文件：data/data/包名/tinker/patch-md5/patch-md5.apk
         File patchVersionFile = (patchVersionFileRelPath != null ? new File(patchVersionDirectoryFile.getAbsolutePath(), patchVersionFileRelPath) : null);
         // 非法文件则停止加载并删除
         if (!SharePatchFileUtil.isLegalFile(patchVersionFile)) {
-            ShareTinkerLog.w(TAG, "tryLoadPatchFiles:onPatchVersionFileNotFound");
-            //we may delete patch info file
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_VERSION_FILE_NOT_EXIST);
             return;
         }
@@ -233,16 +211,16 @@ public class TinkerLoader extends AbstractTinkerLoader {
             ShareIntentUtil.setIntentReturnCode(resultIntent, ShareConstants.ERROR_LOAD_PATCH_PACKAGE_CHECK_FAIL);
             return;
         }
-
         resultIntent.putExtra(ShareIntentUtil.INTENT_PATCH_PACKAGE_CONFIG, securityCheck.getPackagePropertiesIfPresent());
+
         // 是否合成dex
         final boolean isEnabledForDex = ShareTinkerInternals.isTinkerEnabledForDex(tinkerFlag);
-        // 是否运了方舟编译器
+        // 是否方舟编译器
         final boolean isArkHotRuning = ShareTinkerInternals.isArkHotRuning();
 
         if (!isArkHotRuning && isEnabledForDex) {
-            //tinker/patch.info/patch-641e634c/dex
-            // 校验补丁包中的dex文件，解析dex_meta文件中的内容
+            // .../patch-641e634c/dex
+            // 解析dex_meta，校验要加载的dex以及对应的的odex是否存在
             boolean dexCheck = TinkerDexLoader.checkComplete(patchVersionDirectory, securityCheck, oatDex, resultIntent);
             if (!dexCheck) {
                 //file not found, do not load patch
@@ -269,7 +247,6 @@ public class TinkerLoader extends AbstractTinkerLoader {
             // 校验so库合法性
             boolean libCheck = TinkerSoLoader.checkComplete(patchVersionDirectory, securityCheck, resultIntent);
             if (!libCheck) {
-                //file not found, do not load patch
                 ShareTinkerLog.w(TAG, "tryLoadPatchFiles:native lib check fail");
                 return;
             }
@@ -309,15 +286,13 @@ public class TinkerLoader extends AbstractTinkerLoader {
         // 判断是否安全模式，也就是加载补丁是否失败了超过三次，超过三次之后直接删除对应补丁回退
         if (!checkSafeModeCount(app)) {
             if (mainProcess) {
-                // 主进程直接删除
-                // Mark current patch as deleted so that other process will not load patch after reboot.
+                // 主进程杀死其他进程，然后直接删除
                 patchInfo.oldVersion = "";
                 patchInfo.newVersion = "";
                 patchInfo.isRemoveNewVersion = false;
                 SharePatchInfo.rewritePatchInfoFileWithLock(patchInfoFile, patchInfo, patchInfoLockFile);
                 ShareTinkerInternals.killProcessExceptMain(app);
 
-                // Actually delete patch files.
                 String patchVersionDirFullPath = patchDirectoryPath + "/" + patchName;
                 SharePatchFileUtil.deleteDir(patchVersionDirFullPath);
 
@@ -332,9 +307,8 @@ public class TinkerLoader extends AbstractTinkerLoader {
             }
         }
 
-        //
         if (!isArkHotRuning && isEnabledForDex) {
-            //
+            // 加载dex，isSystemOTA = true以解释模式加载
             boolean loadTinkerJars = TinkerDexLoader.loadTinkerJars(app, patchVersionDirectory, oatDex, resultIntent, isSystemOTA, isProtectedApp);
 
             if (isSystemOTA) {
@@ -367,8 +341,8 @@ public class TinkerLoader extends AbstractTinkerLoader {
             }
         }
 
-        //now we can load patch resource
         if (isEnabledForResource) {
+            // 加载资源文件
             boolean loadTinkerResources = TinkerResourceLoader.loadTinkerResources(app, patchVersionDirectory, resultIntent);
             if (!loadTinkerResources) {
                 ShareTinkerLog.w(TAG, "tryLoadPatchFiles:onPatchLoadResourcesFail");

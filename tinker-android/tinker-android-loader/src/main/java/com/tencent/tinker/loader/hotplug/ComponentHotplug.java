@@ -33,17 +33,24 @@ public final class ComponentHotplug {
     public synchronized static void install(TinkerApplication app, ShareSecurityCheck checker) throws UnsupportedEnvironmentException {
         if (!sInstalled) {
             try {
+                // 解析inc_component_meta，将xml activity节点解析为ActivityInfo对象并存
                 if (IncrementComponentManager.init(app, checker)) {
+                    // ServiceManager.getService获取AMS客户端代理对象，然后创建此代理对象的动态代理对象，hook startActivity等方法
                     sAMSInterceptor = new ServiceBinderInterceptor(app, EnvConsts.ACTIVITY_MANAGER_SRVNAME, new AMSInterceptHandler(app));
+                    // 同理hook PMS
                     sPMSInterceptor = new ServiceBinderInterceptor(app, EnvConsts.PACKAGE_MANAGER_SRVNAME, new PMSInterceptHandler());
                     sAMSInterceptor.install();
                     sPMSInterceptor.install();
 
                     if (Build.VERSION.SDK_INT < 27) {
+                        // android 8.1以下
+                        // ActivityThread.mH
                         final Handler mH = fetchMHInstance(app);
+                        // hook ActivityThread.mH，将H.mCallBack替换为MHMessageHandler
                         sMHMessageInterceptor = new HandlerMessageInterceptor(mH, new MHMessageHandler(app));
                         sMHMessageInterceptor.install();
                     } else {
+                        // >=8.1 hook ActivityThread.mInstrumentation，把他替换为TinkerHackInstrumentation
                         sTinkerHackInstrumentation = TinkerHackInstrumentation.create(app);
                         sTinkerHackInstrumentation.install();
                     }

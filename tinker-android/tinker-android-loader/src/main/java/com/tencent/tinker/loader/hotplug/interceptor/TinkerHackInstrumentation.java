@@ -48,6 +48,7 @@ public class TinkerHackInstrumentation extends Instrumentation {
         if (mInstrumentationField.get(mActivityThread) instanceof TinkerHackInstrumentation) {
             ShareTinkerLog.w(TAG, "already installed, skip rest logic.");
         } else {
+            // 替换ActivityThread.mInstrumentationField
             mInstrumentationField.set(mActivityThread, this);
         }
     }

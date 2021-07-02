@@ -38,8 +38,10 @@ final class NewClassLoaderInjector {
         for (int i = 0; i < patchedDexPaths.length; ++i) {
             patchedDexPaths[i] = patchedDexes.get(i).getAbsolutePath();
         }
+        // 创建classLoader
         final ClassLoader newClassLoader = createNewClassLoader(oldClassLoader,
               dexOptDir, useDLC, patchedDexPaths);
+        // 替换classLoader
         doInject(app, newClassLoader);
         return newClassLoader;
     }

@@ -500,7 +500,7 @@ public class DexDiffPatchInternal extends BasePatchInternal {
 
                 String dexDiffMd5 = info.dexDiffMd5;
                 String oldDexCrc = info.oldDexCrC;
-                // 非主dex，且该dex没有改变的话destMd5InDvm字段值为"0"，此dex在art下无需合成
+                // 非主dex，且该dex没有改变的话destMd5InDvm字段值为"0"，此dex在dalvik下无需合成
                 if (!isVmArt && info.destMd5InDvm.equals("0")) {
                     ShareTinkerLog.w(TAG, "patch dex %s is only for art, just continue", patchRealPath);
                     continue;
